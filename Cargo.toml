@@ -1,0 +1,9 @@
+[package]
+name = "misaki"
+version = "0.1.0"
+authors = ["haze <admin@haze.pw>"]
+
+[dependencies]
+discord = "0.8.0"
+daemonize = "0.2.3"
+math-text-transform = "0.1.1"
