@@ -1,3 +1,4 @@
 target/
 res/
+.DS_Store
 **/*.rs.bk

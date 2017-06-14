@@ -22,11 +22,12 @@ fn read_file(filename: &str) -> String {
 
 pub trait MPlugin {
 	fn id(&self) -> String;
-    fn execute(&self, message: &Message, arguments: Vec<String>) -> String;
+    fn execute(&self, discord: &Discord, message: &Message, arguments: Vec<String>) -> String;
 }
 
 fn add_default_plugins<'a>(plugins: &mut Vec<Box<MPlugin>>) {
 	plugins.push(Box::new(TextTransformPlugin));
+	plugins.push(Box::new(ReactPlugin));
 }
 
 fn main() {
@@ -46,10 +47,13 @@ fn main() {
 		    		if m_content.chars().take(catalyst.len()).collect::<String>() == catalyst {
 		    			let ident = m_content.chars().skip(catalyst.len()).take_while(|&c| c != ' ').collect::<String>();
 		    			for plugin in plugins.iter() {
-		    				if ident == plugin.id() {
+		    				if ident.to_lowercase() == plugin.id() {
 		    					let arguments = m_content.split_whitespace().skip(1).map(|x| String::from(x)).collect();
 		    					discord.delete_message(message.channel_id, message.id).expect("Failed to delete message.");
-		    					discord.send_message(message.channel_id, &*&plugin.execute(message, arguments), "", false).expect("Failed to send message.");
+		    					let result = &*&plugin.execute(&discord, message, arguments);
+		    					if !result.is_empty() {
+		    						discord.send_message(message.channel_id, result, "", false).expect("Failed to send message.");
+		    					}
 		    					break;
 		    				}
 		    			}
