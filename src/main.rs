@@ -28,6 +28,7 @@ pub trait MPlugin {
 fn add_default_plugins<'a>(plugins: &mut Vec<Box<MPlugin>>) {
 	plugins.push(Box::new(TextTransformPlugin));
 	plugins.push(Box::new(ReactPlugin));
+	plugins.push(Box::new(UserInfoPlugin));
 }
 
 fn main() {

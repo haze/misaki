@@ -6,7 +6,31 @@ use MPlugin;
 use discord::model::ReactionEmoji;
 use discord::model::Message;
 use discord::model::Channel::*;
+use discord::builders::EmbedBuilder;
 use discord::Discord;
+
+pub struct UserInfoPlugin;
+impl MPlugin for UserInfoPlugin {
+    fn id(&self) -> String { String::from("dox") }
+    fn execute(&self, d: &Discord, msg: &Message, args: Vec<String>) -> String {
+    	if msg.mentions.len() > 0 {
+    		let ref mem = msg.mentions[0];
+    		let avatar_url = d.get_user_avatar_url(mem.id, mem.avatar.as_ref().unwrap());
+    		d.send_embed(msg.channel_id, "", |b| { 
+    			b.color(131313)
+    			.title(&*mem.name)
+    			.thumbnail(&avatar_url)
+                .fields(|f| {
+                    f
+                    .field("Discriminator", &*mem.discriminator.to_string(), true)
+                    .field("Bot?", &*mem.bot.to_string(), true)
+                    .field("Id", &*mem.id.to_string(), true)
+                })
+    		}).expect("Failed to send embed.");
+    	}
+    	String::new()
+    }
+}
 
 pub struct ReactPlugin;
 impl MPlugin for ReactPlugin {
@@ -14,7 +38,7 @@ impl MPlugin for ReactPlugin {
 	fn execute(&self, d: &Discord, msg: &Message, args: Vec<String>) -> String {
 		let unicode: Vec<char> = vec!('\u{1F1E6}', '\u{1F1E7}', '\u{1F1E8}', '\u{1F1E9}', '\u{1F1EA}', '\u{1F1EB}', '\u{1F1EC}', '\u{1F1ED}', '\u{1F1EE}', '\u{1F1EF}', '\u{1F1F0}', '\u{1F1F1}', '\u{1F1F2}', '\u{1F1F3}', '\u{1F1F4}', '\u{1F1F5}', '\u{1F1F6}', '\u{1F1F7}', '\u{1F1F8}', '\u{1F1F9}', '\u{1F1FA}', '\u{1F1FB}', '\u{1F1FC}', '\u{1F1FD}', '\u{1F1FE}', '\u{1F1FF}');
 		let alphabet: Vec<char> = vec!('a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z');
-		let ref word = args[0]; // ignore rest of args
+		let ref word = args[0];
 		let last_message = d.get_messages(msg.channel_id, discord::GetMessages::MostRecent, Some(1)).expect("Last message not found!?");
 		for ch in word.chars() {
 			match alphabet.iter().position(|&x| x == ch) {
@@ -45,7 +69,7 @@ impl MPlugin for TextTransformPlugin {
     	    "f" => return text.to_math_fraktur(),
     	    "m" => return text.to_math_monospace(),
     	    "ds" => return text.to_math_double_struck(),
-    	    _ => return format!("Text Transform {} not found.", form)
+    	    _ => return String::new()
     	}
     }
 }
