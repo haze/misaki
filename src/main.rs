@@ -22,12 +22,13 @@ fn read_file(filename: &str) -> String {
 
 pub trait MPlugin {
 	fn id(&self) -> Vec<&str>;
-    fn execute(&self, data: PluginData) -> String;
+   fn execute(&self, data: PluginData) -> String;
 }
 
 fn add_default_plugins<'a>(plugins: &mut Vec<Box<MPlugin>>) {
 	plugins.push(Box::new(TextTransformPlugin));
 	plugins.push(Box::new(ReactPlugin));
+	plugins.push(Box::new(PurgePlugin));
 	plugins.push(Box::new(SettingsPlugin));
 	plugins.push(Box::new(UserInfoPlugin));
 }
@@ -37,6 +38,16 @@ pub struct MisakiSettings {
 	embed_mode:  bool,
 	should_mark: bool
 	
+}
+
+impl MisakiSettings {
+	fn set(&mut self, name: &str, to: bool, flip: bool) -> Option<bool> {
+		return match &*String::from(name).to_lowercase() {
+			"embed" => { self.embed_mode = if flip { !self.embed_mode } else { to }; return Some(self.embed_mode) },
+			"mark" => { self.should_mark = if flip { !self.should_mark } else { to }; return Some(self.should_mark) }, 
+			_ => None
+		}
+	}
 }
 
 
@@ -73,8 +84,7 @@ fn main() {
 			    					let set = &mut settings; 
 			    					let result = &*&plugin.execute(PluginData{discord: &discord, message: message, arguments: arguments, settings: set});
 			    					if !result.is_empty() {
-			    						println!("mark = {:?}", set.should_mark);
-			    						discord.send_message(message.channel_id, &*format!("{:?}{:?}", if set.should_mark { "|=>" } else { "" }, result), "", false).expect("Failed to send message.");
+			    						discord.send_message(message.channel_id, &*format!("{} {}", if set.should_mark { "`►`" } else { "" }, result), "", false).expect("Failed to send message.");
 			    					}
 		    						break 'plugins;
 		    					}

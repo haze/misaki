@@ -7,16 +7,30 @@ use *;
 use discord::model::ReactionEmoji; 
 
 
-pub struct SettingsPlugin;
-impl SettingsPlugin {
-   fn get_setting_refrence<'a>(&self, s_name: &str, settings: &'a MisakiSettings) -> Option<&'a bool> {
-      return match &*String::from(s_name).to_lowercase() {
-          "mark" => Some(&settings.should_mark),
-          "embed" => Some(&settings.embed_mode),
-          _ => None
+pub struct PurgePlugin;
+impl MPlugin for PurgePlugin {
+   fn id(&self) -> Vec<&str> { vec!("purge", "clear") }
+   fn execute(&self, data: PluginData) -> String {
+      if data.arguments.len() == 1 {
+         let ref num_up = data.arguments[0];
+         let mut msgs: Vec<Message> = Vec::new();
+         let num: u64 = FromStr::from_str(&*num_up).expect("Failed to parse purge count.");
+         let index_buffer = if num > 1 { num.wrapping_div(2) } else { num };
+         while (msgs.len() as u64) < num {
+            let mut others = data.discord.get_messages(data.message.channel_id, discord::GetMessages::MostRecent, Some(index_buffer))
+               .unwrap_or(Vec::new());
+            msgs.append( &mut others );
+         }
+         for msg in msgs.iter().filter(|x| x.author.id == data.message.author.id) {
+            data.discord.delete_message(msg.channel_id, msg.id).ok();
+         }
       }
+
+      String::new()
    }
 }
+
+pub struct SettingsPlugin;
 impl MPlugin for SettingsPlugin {
 
    fn id(&self) -> Vec<&str> { vec!("settings", "edit") }
@@ -25,21 +39,22 @@ impl MPlugin for SettingsPlugin {
       let ref setting = *args[0].to_lowercase();
       let value = if args.len() > 1 { Some(args[1].clone()) } else { None };
       match setting {
-         // mark messages with |=>
          "mark" | "embed" => {
-            let mut r = self.get_setting_refrence(setting,data.settings).expect("Found no variable setting with name.");
-            let old = r.clone();
-            match value {
-               Some(n_val) => { 
-                  let b: Result<bool, _> = FromStr::from_str(&*n_val);
-                  match b {
-                     Ok(b_fin) => r = &b_fin,
-                     Err(why) => return format!("{:?}", why),
-                  };
-               },
-               None => r = &!old,
-            };
-            format!("{} := `{:?}`", setting, r)
+            let mut z = None;
+            if value.is_some() {
+               let n_val = value.unwrap();
+               let string_res: Result<bool, _> = FromStr::from_str(&*n_val);
+               if string_res.is_ok() {
+                  z = data.settings.set(setting, string_res.unwrap(), false);
+               }
+            } else {
+               z = data.settings.set(setting, false, true)
+            }
+            if z.is_some() {
+               format!("{} := `{:?}`", setting, z.unwrap())
+            } else {
+               String::new()
+            }
          },
          _ => String::new()
       }
