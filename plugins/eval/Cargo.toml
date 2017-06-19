@@ -1,0 +1,12 @@
+[package]
+name = "eval"
+version = "0.1.0"
+authors = ["haze <admin@haze.pw>"]
+
+
+[lib]
+name = "mis_eval"
+crate-type = ["dylib"]
+
+[dependencies]
+misaki_api = { path = "../../api"}

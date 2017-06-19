@@ -1,5 +1,10 @@
 extern crate discord;
 extern crate math_text_transform;
+extern crate sharedlib as lib;
+extern crate misaki_api;
+extern crate glob;
+
+use misaki_api::misaki::{MPlugin, MisakiSettings, PluginData};
 
 mod plugins;
 
@@ -8,63 +13,54 @@ use discord::model::{Message, Event};
 
 use plugins::*;
 
+use std::rc::Rc;
 use std::fs::File;
 use std::io::Read;
 
+use glob::glob;
 
+use lib::Symbol;
+use lib::LibRc;
 
 fn read_file(filename: &str) -> String {
-	let mut file = File::open(filename).expect(&format!("File \"{}\" not found.", filename));
+	let mut file = File::open(filename).expect(&format!("File \"{}\" not found", filename));
 	let mut contents = String::new();
 	file.read_to_string(&mut contents).expect(&format!("Reading file \"{}\" failed.", filename));
 	contents
 }
 
-pub trait MPlugin {
-	fn id(&self) -> Vec<&str>;
-   fn execute(&self, data: PluginData) -> String;
+fn add_default_plugins(plugins: &mut Vec<(Option<LibRc>, Box<MPlugin>)>) {
+	plugins.push((None, Box::new(TextTransformPlugin)));
+	plugins.push((None, Box::new(ReactPlugin)));
+	plugins.push((None, Box::new(PurgePlugin)));
+	plugins.push((None, Box::new(SettingsPlugin)));
+	plugins.push((None, Box::new(UserInfoPlugin)));
 }
 
-fn add_default_plugins<'a>(plugins: &mut Vec<Box<MPlugin>>) {
-	plugins.push(Box::new(TextTransformPlugin));
-	plugins.push(Box::new(ReactPlugin));
-	plugins.push(Box::new(PurgePlugin));
-	plugins.push(Box::new(SettingsPlugin));
-	plugins.push(Box::new(UserInfoPlugin));
-}
 
-#[derive(Default)]
-pub struct MisakiSettings {
-	embed_mode:  bool,
-	should_mark: bool
-	
-}
-
-impl MisakiSettings {
-	fn set(&mut self, name: &str, to: bool, flip: bool) -> Option<bool> {
-		return match &*String::from(name).to_lowercase() {
-			"embed" => { self.embed_mode = if flip { !self.embed_mode } else { to }; return Some(self.embed_mode) },
-			"mark" => { self.should_mark = if flip { !self.should_mark } else { to }; return Some(self.should_mark) }, 
-			_ => None
+fn add_external_plugins(plugins: &mut Vec<(Option<LibRc>, Box<MPlugin>)>) {
+	for dylib in glob("plugins/compiled/*.dylib").expect("Failed to read glob pattern...") {
+		unsafe {
+			let lib = LibRc::new(dylib.unwrap()).unwrap();
+			let plugin: Box<MPlugin>;
+			{
+				let get_plugin_ex: lib::FuncTracked<fn() -> Box<MPlugin>, Rc<_>> = lib.find_func("get_plugin").unwrap();
+				let plugin_sym = get_plugin_ex.get();
+				let plugin_ptr: fn() -> Box<MPlugin> = std::mem::transmute(plugin_sym);
+				plugin = plugin_ptr();	
+			}
+			plugins.push((Some(lib), plugin));
 		}
 	}
 }
 
-
-// used for taking up less space when passing information around to plugins
-pub struct PluginData<'a> {
-	discord:   &'a Discord,
-	message:   &'a Message,
-	arguments:     Vec<String>,
-	settings:  &'a mut MisakiSettings,
-}
-
 fn main() {
 	
-	let mut plugins: Vec<Box<MPlugin>> = Vec::new();
+	let mut plugins: Vec<(Option<LibRc>, Box<MPlugin>)> = Vec::new();
 	let mut settings: MisakiSettings = Default::default();
+	
 	add_default_plugins(&mut plugins);
-
+	add_external_plugins(&mut plugins);
 	let token = read_file("res/token.txt");
 	let catalyst = read_file("res/catalyst.txt");
 	let discord = Discord::from_user_token(&token).expect(&format!("Invalid Token: {}", token));
@@ -76,7 +72,8 @@ fn main() {
 		    		let ref m_content: String = message.content;
 		    		if m_content.chars().take(catalyst.len()).collect::<String>() == catalyst {
 		    			let ident = m_content.chars().skip(catalyst.len()).take_while(|&c| c != ' ').collect::<String>();
-		    			'plugins: for plugin in plugins.iter() {
+		    			'plugins: for tup in plugins.iter() {
+		    				let (_, ref plugin) = *tup;
 		    				'aliases: for alias in plugin.id() {
 		    					if *&ident.to_lowercase() == alias {
 			    					let arguments = m_content.split_whitespace().skip(1).map(|x| String::from(x)).collect();
