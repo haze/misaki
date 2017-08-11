@@ -6,7 +6,7 @@ authors = ["haze <admin@haze.pw>"]
 [dependencies]
 misaki_api = { path = "api" }
 discord = "0.8.0"
-daemonize = "0.2.3"
 math-text-transform = "0.1.1"
 sharedlib = "7.0.0"
 glob = "0.2.11"
+eval = "0.4.0"

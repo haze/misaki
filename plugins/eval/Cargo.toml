@@ -10,3 +10,4 @@ crate-type = ["dylib"]
 
 [dependencies]
 misaki_api = { path = "../../api"}
+eval = "0.4.0"
