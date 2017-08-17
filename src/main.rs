@@ -4,6 +4,9 @@ extern crate sharedlib as lib;
 extern crate misaki_api;
 extern crate glob;
 extern crate eval;
+extern crate rusqlite;
+
+
 
 use misaki_api::misaki::{MPlugin, MisakiSettings, PluginData};
 
@@ -23,6 +26,8 @@ use lib::Symbol;
 use lib::LibRc;
 use lib::FuncRc;
 
+const VERSION: &'static str = "2.0.0 a";
+
 fn read_file(filename: &str) -> String {
 	let mut file = File::open(filename).expect(&format!("File \"{}\" not found", filename));
 	let mut contents = String::new();
@@ -31,6 +36,7 @@ fn read_file(filename: &str) -> String {
 }
 
 fn add_default_plugins(plugins: &mut Vec<Box<MPlugin>>) {
+	plugins.push(Box::new(AboutPlugin));
 	plugins.push(Box::new(TextTransformPlugin));
 	plugins.push(Box::new(ReactPlugin));
 	plugins.push(Box::new(PurgePlugin));
@@ -38,6 +44,10 @@ fn add_default_plugins(plugins: &mut Vec<Box<MPlugin>>) {
 	plugins.push(Box::new(UserInfoPlugin));
 	plugins.push(Box::new(EvalPlugin));
 	plugins.push(Box::new(ShillPlugin));
+	plugins.push(Box::new(RememberPlugin));
+	plugins.push(Box::new(RecallPlugin));
+	plugins.push(Box::new(OmnipotencePlugin));
+	plugins.push(Box::new(ForgetPlugin));
 }
 
 

@@ -5,8 +5,117 @@ use std::error::Error;
 use math_text_transform::MathTextTransform;
 use *;
 use discord::model::ReactionEmoji; 
+use rusqlite::Connection;
+use std::path::Path;
 
 
+#[derive(Debug, Clone)]
+struct MemoryChunk {
+    from: String,
+    into: String,
+}
+
+impl MemoryChunk {
+    fn new(from: String, into: String) -> MemoryChunk {
+        MemoryChunk {
+            from: from,
+            into: into
+        }
+    }
+}
+
+fn insert_memory(conn: &Connection, chunk: MemoryChunk) {
+    conn.execute("INSERT INTO memory (msg_from, msg_into) 
+                  VALUES (?1, ?2)", &[&chunk.from, &chunk.into]).unwrap();
+}
+
+fn whole_memory(conn: &Connection) -> Vec<MemoryChunk> {
+    let mut stmt = conn.prepare("SELECT msg_from, msg_into FROM memory").unwrap();
+    let chunk_iter = stmt.query_map(&[], |row|
+        MemoryChunk {
+            from: row.get(0),
+            into: row.get(1)
+        }
+    ).unwrap();
+    let mut chunks: Vec<MemoryChunk> = Vec::new();
+    for chunk_res in chunk_iter {
+        chunks.push( chunk_res.unwrap() );
+    }
+    chunks
+}
+
+fn fetch_memory(conn: &Connection, from: String) -> Option<MemoryChunk> {
+    let chunks = whole_memory(conn);
+    chunks.iter().find(|&x| x.from == from).cloned()
+}
+
+fn delete_memory(conn: &Connection, from: String) {
+    conn.execute("DELETE FROM memory WHERE msg_from = (?1)", &[&from]).unwrap();
+}
+
+fn create_table(conn: &Connection) {
+    conn.execute("CREATE TABLE IF NOT EXISTS memory (
+        msg_from        TEXT NOT NULL PRIMARY KEY,
+        msg_into        TEXT NOT NULL
+        )", &[]).unwrap();
+}
+
+/* Save */
+pub struct RememberPlugin;
+impl MPlugin for RememberPlugin {
+    fn id(&self) -> Vec<&str> { vec!("rem", "sa", "@") }
+    fn execute(&self, data: PluginData) -> String {
+        let conn = Connection::open(Path::new("databases/memory.db")).unwrap();
+        let from = data.arguments[0].clone();
+        let into = data.arguments.into_iter().skip(1).collect::<Vec<String>>().join(" ");
+        create_table(&conn);
+        insert_memory(&conn, MemoryChunk::new(from, into));
+        String::new()
+    }
+}
+
+pub struct ForgetPlugin;
+impl MPlugin for ForgetPlugin {
+    fn id(&self) -> Vec<&str> { vec!("#") }
+    fn execute(&self, data: PluginData) -> String {
+        let conn = Connection::open(Path::new("databases/memory.db")).unwrap();
+        create_table(&conn);
+        delete_memory(&conn, data.arguments[0].clone());
+        String::new()
+    }
+}
+
+pub struct OmnipotencePlugin;
+impl MPlugin for OmnipotencePlugin {
+    fn id(&self) -> Vec<&str> { vec!("!!") }
+    fn execute(&self, data: PluginData) -> String {
+        let conn = Connection::open(Path::new("databases/memory.db")).unwrap();
+        create_table(&conn);
+        let memory = whole_memory(&conn);
+        let mut data = String::new();
+        for chunk in memory {
+            data.push_str(&*format!("{} => {}\n", chunk.from, chunk.into));
+        }
+        format!("```Memory:\n{}```", data)
+    }
+}
+
+/* Load */
+pub struct RecallPlugin;
+impl MPlugin for RecallPlugin {
+    fn id(&self) -> Vec<&str> { vec!("rec", "!") }
+    fn execute(&self, data: PluginData) -> String {
+        let conn = Connection::open(Path::new("databases/memory.db")).unwrap();
+        let name = data.arguments[0].clone();
+        create_table(&conn);
+        let memory = fetch_memory(&conn, name.clone());
+        if memory.is_some() {
+            return memory.unwrap().into;
+        } else {
+            return format!("Memory \"{}\" does not exist.", name);
+        }
+    }
+}
 
 pub struct PurgePlugin;
 impl MPlugin for PurgePlugin {
@@ -16,12 +125,25 @@ impl MPlugin for PurgePlugin {
          let ref num_up = data.arguments[0];
          let num: u64 = FromStr::from_str(&*num_up).expect("Failed to parse purge count.");
          let mut deleted: u64 = 0;
-
+         let mut attemps: u64 = 1;
          while deleted < num {
              let ref last_msg = data.discord.get_messages(data.message.channel_id, discord::GetMessages::MostRecent, Some(1)).expect("Failed to get the last message.")[0];
              if last_msg.author.id == data.message.author.id {
                 data.discord.delete_message(last_msg.channel_id, last_msg.id).ok();
                 deleted += 1;
+             } else {
+                if attemps > 200 {
+                    break;
+                } else {
+                    let messages = data.discord.get_messages(data.message.channel_id, discord::GetMessages::MostRecent, Some(attemps)).expect("Failed to get recent messages.");
+                    for message in messages {
+                        if message.author.id == data.message.author.id {
+                            data.discord.delete_message(message.channel_id, message.id).ok();
+                            deleted += 1;
+                        }
+                    }
+                    attemps += 1;
+                }
              }
          }
          /* 
@@ -171,5 +293,27 @@ impl MPlugin for TextTransformPlugin {
     	    "ds" => return text.to_math_double_struck(),
     	    _ => return String::new()
     	}
+    }
+}
+
+pub struct AboutPlugin;
+impl MPlugin for AboutPlugin {
+    fn id(&self) -> Vec<&str> { vec!("about", "bot") }
+    fn execute(&self, data: PluginData) -> String {
+        let ref d = data.discord;
+        let ref msg = data.message;
+        let conn = Connection::open(Path::new("databases/memory.db")).unwrap();
+        d.send_embed(msg.channel_id, "", |b| { 
+            b.color(0xFF3333)
+            .url("https://github.com/hvze/misaki")
+            .title("Misaki (Modular Selfbot)")
+            .thumbnail("https://ill.fi/ncdt.png")
+            .fields(|f| {
+                f
+                .field("Memory Chunks", &*whole_memory(&conn).len().to_string(), true)    
+                .field("Modules", "12" /* lol */, true)
+            })
+        }).expect("Failed to send embed.");
+        String::new()
     }
 }
