@@ -3,4 +3,5 @@ res/
 .DS_Store
 **/*.rs.bk
 .dylib
+.lock
 .db
