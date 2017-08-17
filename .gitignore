@@ -3,3 +3,4 @@ res/
 .DS_Store
 **/*.rs.bk
 .dylib
+.db
