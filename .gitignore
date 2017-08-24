@@ -1,6 +1,7 @@
 target/
 res/
 .DS_Store
+plugins/compiled
 **/*.rs.bk
 .dylib
 .lock
