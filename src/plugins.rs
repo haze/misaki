@@ -147,7 +147,7 @@ impl MPlugin for PurgePlugin {
     fn execute(&self, data: PluginData) -> String {
         if data.arguments.len() == 1 {
             let ref num_up = data.arguments[0];
-            let num: u64 = FromStr::from_str(&*num_up).expect("Failed to parse purge count.");
+            let num = FromStr::from_str(&*num_up).unwrap();
             let mut deleted: u64 = 0;
             let mut attemps: u64 = 1;
             while deleted < num {
@@ -157,32 +157,35 @@ impl MPlugin for PurgePlugin {
                     Some(1),
                 );
                 if last_msg_if.is_ok() {
-                    let last_msg = &last_msg_if.unwrap()[0];
-                    if last_msg.author.id == data.message.author.id {
-                        data.discord
-                            .delete_message(last_msg.channel_id, last_msg.id)
-                            .ok();
-                        deleted += 1;
-                    } else {
-                        if attemps > 200 {
-                            break;
+                    let last_msgs = &last_msg_if.unwrap();
+                    if last_msgs.len() > 0 {
+                        let ref last_msg = last_msgs[0];
+                        if last_msg.author.id == data.message.author.id {
+                            data.discord
+                                .delete_message(last_msg.channel_id, last_msg.id)
+                                .ok();
+                            deleted += 1;
                         } else {
-                            let messages = data.discord
-                                .get_messages(
-                                    data.message.channel_id,
-                                    discord::GetMessages::MostRecent,
-                                    Some(attemps),
-                                )
-                                .expect("Failed to get recent messages.");
-                            for message in messages {
-                                if message.author.id == data.message.author.id {
-                                    data.discord
-                                        .delete_message(message.channel_id, message.id)
-                                        .ok();
-                                    deleted += 1;
+                            if attemps > 200 {
+                                break;
+                            } else {
+                                let messages = data.discord
+                                    .get_messages(
+                                        data.message.channel_id,
+                                        discord::GetMessages::MostRecent,
+                                        Some(attemps),
+                                    )
+                                    .expect("Failed to get recent messages.");
+                                for message in messages {
+                                    if message.author.id == data.message.author.id {
+                                        data.discord
+                                            .delete_message(message.channel_id, message.id)
+                                            .ok();
+                                        deleted += 1;
+                                    }
                                 }
+                                attemps += 1;
                             }
-                            attemps += 1;
                         }
                     }
                 }
@@ -319,6 +322,30 @@ impl MPlugin for ReactPlugin {
             if data.settings.react_custom {
                 let mut occurance_map: HashMap<char, i32> = HashMap::new();
                 // we're smart, use the whole thing.
+                unicode.insert(
+                    String::from(" "),
+                    String::from("<:space_blank:350213580651757579>"),
+                );
+
+                unicode.insert(
+                    String::from(" 2"),
+                    String::from("<:space_blank_1:350213580827656202>"),
+                );
+
+                unicode.insert(
+                    String::from(" 3"),
+                    String::from("<:space_blank_2:350213580643237889>"),
+                );
+
+                unicode.insert(
+                    String::from(" 3"),
+                    String::from("<:space_blank_3:350213580857147392>"),
+                );
+
+                unicode.insert(
+                    String::from(" 3"),
+                    String::from("<:space_blank_4:350213580970262528>"),
+                );
 
                 unicode.insert(
                     String::from("a"),
@@ -424,7 +451,6 @@ impl MPlugin for ReactPlugin {
                     String::from("z"),
                     String::from("<:cap_Z:350164706259894272>"),
                 );
-
                 unicode.insert(
                     String::from("a2"),
                     String::from("<:cap_A_2:350172373414051840>"),
@@ -535,7 +561,15 @@ impl MPlugin for ReactPlugin {
                     match occurance_map.get(&ch) {
                         Some(n) => {
                             let mut x_name: String = ch.to_string();
-                            let emoji = unicode.get(&format!("{}{}", x_name, if *n > 1 { n.to_string() } else { "".to_string() }));
+                            let emoji = unicode.get(&format!(
+                                "{}{}",
+                                x_name,
+                                if *n > 1 {
+                                    n.to_string()
+                                } else {
+                                    "".to_string()
+                                }
+                            ));
                             if emoji.is_some() {
                                 let a_emoji = emoji.unwrap().chars().skip(2).collect::<String>();
                                 let real = a_emoji

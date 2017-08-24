@@ -72,7 +72,7 @@ fn add_external_plugins(plugins: &mut Vec<(Option<FuncRc<fn() -> Box<MPlugin>>>,
 fn main() {
 
     let mut plugins: Vec<Box<MPlugin>> = Vec::new();
-    let mut settings: MisakiSettings = Default::default();
+    let mut settings: MisakiSettings = MisakiSettings { react_custom: true, ..Default::default() };
 
     add_default_plugins(&mut plugins);
     // disable eternal plugins
