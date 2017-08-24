@@ -33,7 +33,7 @@ fn read_file(filename: &str) -> String {
         "Reading file \"{}\" failed.",
         filename
     ));
-    contents
+    contents.trim().to_string();
 }
 
 fn add_default_plugins(plugins: &mut Vec<Box<MPlugin>>) {
