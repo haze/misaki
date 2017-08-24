@@ -680,6 +680,7 @@ impl MPlugin for AboutPlugin {
         let ref d = data.discord;
         let ref msg = data.message;
         let conn = Connection::open(Path::new("databases/memory.db")).unwrap();
+        create_table(&conn);
         d.send_embed(msg.channel_id, "", |b| {
             b.color(0xFF3333)
                 .url("https://github.com/hvze/misaki")
