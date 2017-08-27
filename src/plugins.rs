@@ -230,7 +230,7 @@ impl MPlugin for PurgePlugin {
                                 .ok();
                             deleted += 1;
                         } else {
-                            if attemps > 200 {
+                            if attemps > 100 { // Can't get most recent messages more than 100 times..
                                 break;
                             } else {
                                 let messages = data.discord
