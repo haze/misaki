@@ -9,7 +9,7 @@ use discord::model::EmojiId;
 use rusqlite::Connection;
 use std::path::Path;
 use std::collections::HashMap;
-
+use rand::Rng;
 
 #[derive(Debug, Clone)]
 struct MemoryChunk {
@@ -139,6 +139,70 @@ impl MPlugin for RecallPlugin {
     }
 }
 
+/* For Misconception */
+#[derive(Default, Debug)]
+struct MarkedString {
+    string: String,
+    upper_indicies: Vec<u32>,
+}
+
+fn load_words() -> HashMap<Vec<String>, String> {
+    let mut map = HashMap::new();
+    let mut words_str: String = String::new();
+    let mut file = File::open("res/mistaken.txt").unwrap();
+    file.read_to_string(&mut words_str);
+    for excerpt in words_str.lines() {
+        let mut data = excerpt.split("->");
+        let left = data.nth(0).unwrap().to_lowercase();
+        let right = data.nth(0).unwrap();
+        let a_right = right.split(", ").map(|x| x.to_string()).collect::<Vec<String>>();
+        map.insert(a_right, left);
+    }
+    map
+} 
+
+pub struct MisconceptionPlugin;
+impl MPlugin for MisconceptionPlugin {
+    fn id(&self) -> Vec<&str> { vec!["misconcept", "uhm"] }
+    fn execute(&self, data: PluginData) -> String {
+
+        fn to_misconception(text: String) -> String {
+            let misconceptions = load_words();
+            let words = text.split(" ").map(|x| x.to_string()).collect::<Vec<String>>();
+            words.iter().map(|x| {
+                let mut key: Vec<String> = Vec::new();
+                for key in misconceptions.keys() {
+                    if key.contains(&x.to_string()) {
+                        return misconceptions.get(key).unwrap().clone() 
+                    }
+                }
+                x.clone()
+            }).collect::<Vec<String>>().join(" ")
+        }
+
+        let ref msg = data.message;
+        let ref d = data.discord;
+        
+        let last_msg_if = data.discord.get_messages(
+            data.message.channel_id,
+            discord::GetMessages::MostRecent,
+            Some(1),
+        );
+
+        if last_msg_if.is_ok() {
+            let last_msg = &last_msg_if.unwrap()[0];
+            let last_msg_content = last_msg.content.clone();
+            if last_msg.author.id == msg.author.id {
+                d.edit_message(last_msg.channel_id, last_msg.id, &*to_misconception(last_msg_content));
+            } else {
+                return to_misconception(last_msg_content)
+            }
+        }
+        String::new()
+    }
+}
+
+
 pub struct PurgePlugin;
 impl MPlugin for PurgePlugin {
     fn id(&self) -> Vec<&str> {
@@ -205,6 +269,8 @@ impl MPlugin for PurgePlugin {
         String::new()
     }
 }
+
+
 
 pub struct ShillPlugin;
 impl MPlugin for ShillPlugin {
@@ -294,6 +360,42 @@ impl MPlugin for UserInfoPlugin {
                             .field("Id", &*mem.id.to_string(), true)
                     })
             }).expect("Failed to send embed.");
+        }
+        String::new()
+    }
+}
+
+pub struct MockPlugin;
+impl MPlugin for MockPlugin {
+    fn id(&self) -> Vec<&str> {
+        vec!["mock", "mo"]
+    }
+
+    fn execute(&self, data: PluginData) -> String {
+        fn mock(text: String) -> String {
+            let mut rng = rand::thread_rng();
+            text.chars().map(|x| {
+                if rng.gen() { x.to_uppercase().to_string() } else { x.to_lowercase().to_string() }
+            }).collect::<String>()
+        }
+
+        let ref args = data.arguments;
+        let ref msg = data.message;
+        let ref d = data.discord;
+        
+        let last_msg_if = data.discord.get_messages(
+            data.message.channel_id,
+            discord::GetMessages::MostRecent,
+            Some(1),
+        );
+        if last_msg_if.is_ok() {
+            let last_msg = &last_msg_if.unwrap()[0];
+            let last_msg_content = last_msg.content.clone();
+            if last_msg.author.id == msg.author.id {
+                d.edit_message(last_msg.channel_id, last_msg.id, &*mock(last_msg_content));
+            } else {
+                return mock(last_msg_content)
+            }
         }
         String::new()
     }

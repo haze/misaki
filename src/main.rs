@@ -5,6 +5,7 @@ extern crate misaki_api;
 extern crate glob;
 extern crate eval;
 extern crate rusqlite;
+extern crate rand;
 
 use misaki_api::misaki::{MPlugin, MisakiSettings, PluginData};
 
@@ -49,6 +50,8 @@ fn add_default_plugins(plugins: &mut Vec<Box<MPlugin>>) {
     plugins.push(Box::new(RecallPlugin));
     plugins.push(Box::new(OmnipotencePlugin));
     plugins.push(Box::new(ForgetPlugin));
+    plugins.push(Box::new(MockPlugin));
+    plugins.push(Box::new(MisconceptionPlugin));
 }
 
 
@@ -134,7 +137,7 @@ fn main() {
                 println!("Error: Gateway Closed. Code[{:?}] -- {}", code, body);
                 break;
             }
-            Err(err) => println!("Got err: {}", err),
+            Err(_) => (),
         }
     }
 }
