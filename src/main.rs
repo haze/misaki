@@ -6,15 +6,18 @@ extern crate glob;
 extern crate eval;
 extern crate rusqlite;
 extern crate rand;
+extern crate curl;
 
 use misaki_api::misaki::{MPlugin, MisakiSettings, PluginData};
 
 mod plugins;
+mod react;
 
 use discord::Discord;
 use discord::model::{Message, Event};
 
 use plugins::*;
+use react::ReactPlugin; // i hate that big ass plugin.
 
 use std::fs::File;
 use std::io::Read;
@@ -25,7 +28,7 @@ use lib::Symbol;
 use lib::LibRc;
 use lib::FuncRc;
 
-const VERSION: &'static str = "2.0.0 a";
+const VERSION: &'static str = "2.1.0 F";
 
 fn read_file(filename: &str) -> String {
     let mut file = File::open(filename).expect(&format!("File \"{}\" not found", filename));
@@ -52,6 +55,7 @@ fn add_default_plugins(plugins: &mut Vec<Box<MPlugin>>) {
     plugins.push(Box::new(ForgetPlugin));
     plugins.push(Box::new(MockPlugin));
     plugins.push(Box::new(MisconceptionPlugin));
+    plugins.push(Box::new(LatexPlugin));
 }
 
 
@@ -76,14 +80,18 @@ fn main() {
 
     let mut plugins: Vec<Box<MPlugin>> = Vec::new();
     let mut settings: MisakiSettings = MisakiSettings { react_custom: true, ..Default::default() };
-
+    println!("Adding default plugins...");
     add_default_plugins(&mut plugins);
+    println!("Added {} plugins!", plugins.len());
     // disable eternal plugins
     // add_external_plugins(&mut plugins);
+    println!("Reading token and catalyst...");
     let token = read_file("res/token.txt");
     let catalyst = read_file("res/catalyst.txt");
+    println!("Read the token and catalyst successfully!");
     let discord = Discord::from_user_token(&token).expect(&format!("Invalid Token: {}", token));
-    let (mut connection, ready) = discord.connect().expect("Connection failed.");
+    let (mut connection, ready) = discord.connect().expect("Connection failed");
+    println!("Connected!");
     loop {
         match connection.recv_event() {
             Ok(Event::MessageCreate(ref message)) => {

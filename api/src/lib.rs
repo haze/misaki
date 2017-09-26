@@ -11,9 +11,54 @@ pub mod misaki {
         pub embed_mode: bool,
         pub should_mark: bool,
 		pub react_custom: bool,
+        pub latex_color: String,
+        pub latex_size: u32,
     }
 
     impl MisakiSettings {
+        pub fn is_number(&self, name: &str) -> bool {
+            match &*String::from(name).to_lowercase() {
+                "latex_size" => true,
+                _ => false
+            }
+        }
+
+        pub fn is_string(&self, name: &str) -> bool {
+            match &*String::from(name).to_lowercase() {
+                "latex_col" => true,
+                _ => false
+            }
+        }
+
+        pub fn is_bool(&self, name: &str) -> bool {
+            match &*String::from(name).to_lowercase() {
+                "embed" => true,
+                "mark" => true,
+                "react" => true,
+                _ => false
+            }
+        }
+
+        pub fn set_num(&mut self, name: &str, to: u32) -> Option<u32> {
+            match &*String::from(name).to_lowercase() {
+                "latex_size" => {
+                    self.latex_size = to;
+                    Some(self.latex_size)
+                }
+                _ => None,
+            }
+        }
+
+        pub fn set_str(&mut self, name: &str, to: String) -> Option<String> {
+            return match &*String::from(name).to_lowercase() {
+                "latex_col" => {
+                    self.latex_color = to.clone();
+                    Some(self.latex_color.clone())
+                }
+                _ => None,
+            };
+        }
+
         pub fn set(&mut self, name: &str, to: bool, flip: bool) -> Option<bool> {
             return match &*String::from(name).to_lowercase() {
                 "embed" => {

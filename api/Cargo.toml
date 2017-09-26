@@ -4,4 +4,4 @@ version = "0.1.0"
 authors = ["haze <admin@haze.pw>"]
 
 [dependencies]
-discord = "0.8.0"
+discord = { git = "https://github.com/SpaceManiac/discord-rs" }
