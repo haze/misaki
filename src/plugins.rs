@@ -517,9 +517,9 @@ impl MPlugin for LatexPlugin {
         let form = data.arguments.join(" ");
         let mut handle = Easy::new();
         handle.url("http://quicklatex.com/latex3.f").unwrap();
-        let formula = format!("formula={}&fcolor={}", form, data.settings.latex_color);
+        let formula = format!("formula={}&fcolor={}&fsize={}px", form, data.settings.latex_color, data.settings.latex_size);
         let chid = data.message.channel_id;
-        let mut xdat = formula + "&fsize=17px&mode=0&out=1&remhost=quicklatex.com&preamble=\\usepackage{amsmath}\n\\usepackage{amsfonts}\n\\usepackage{amssymb}&rnd=66.52322504562316";
+        let mut xdat = formula + "&mode=0&out=1&remhost=quicklatex.com&preamble=\\usepackage{amsmath}\n\\usepackage{amsfonts}\n\\usepackage{amssymb}&rnd=66.52322504562316";
         handle.post_field_size(xdat.len() as u64).unwrap();
         // let mut result = String::new();
 
