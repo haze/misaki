@@ -13,7 +13,7 @@ use misaki_api::misaki::{MPlugin, MisakiSettings, PluginData};
 mod plugins;
 mod react;
 
-use discord::Discord;
+use discord::{Connection, Discord};
 use discord::model::{Message, Event};
 
 use plugins::*;
@@ -21,6 +21,7 @@ use react::ReactPlugin; // i hate that big ass plugin.
 
 use std::fs::File;
 use std::io::Read;
+use std::rc::Rc;
 
 use glob::glob;
 
@@ -40,7 +41,8 @@ fn read_file(filename: &str) -> String {
     contents.trim().to_string()
 }
 
-fn add_default_plugins(plugins: &mut Vec<Box<MPlugin>>) {
+fn add_default_plugins(mut rc_plugins: &mut Rc<Vec<Box<MPlugin>>>) {
+    let plugins = Rc::get_mut(&mut rc_plugins).unwrap();
     plugins.push(Box::new(AboutPlugin));
     plugins.push(Box::new(TextTransformPlugin));
     plugins.push(Box::new(ReactPlugin));
@@ -56,6 +58,8 @@ fn add_default_plugins(plugins: &mut Vec<Box<MPlugin>>) {
     plugins.push(Box::new(MockPlugin));
     plugins.push(Box::new(MisconceptionPlugin));
     plugins.push(Box::new(LatexPlugin));
+    plugins.push(Box::new(RepeatPlugin));
+    plugins.push(Box::new(GamePlugin));
 }
 
 
@@ -76,9 +80,93 @@ fn add_external_plugins(plugins: &mut Vec<(Option<FuncRc<fn() -> Box<MPlugin>>>,
     }
 }
 
-fn main() {
+// new function so i don't repeatedly look for a plugin
+pub fn execute_plugin_multiple(connection: &Connection, times: i32, plugins: &Rc<Vec<Box<MPlugin>>>, settings: &mut MisakiSettings, discord: &Discord, message: &Message, new_content: String, name: String) {
+    let mut f_plugin = None;
+    'plugins: for plugin in plugins.iter() {
+        'aliases: for alias in plugin.id() {
+            if *&name.to_lowercase() == alias {
+                discord.delete_message(message.channel_id, message.id).ok();
+                f_plugin = Some(plugin);
+                break 'plugins;
+            }
+        }
+    }
+    discord.delete_message(message.channel_id, message.id).ok();
+    if !f_plugin.is_none() {
+        (0..times).for_each(|_| {
+            discord.delete_message(message.channel_id, message.id).ok();
+            let arguments = new_content
+                .split_whitespace()
+                .skip(1) // skip identifier, thing and MORE
+                .map(|x| String::from(x))
+                .collect();
+            let result = f_plugin.unwrap().execute(PluginData {
+                connection,
+                discord: &discord,
+                message: &message,
+                plugins: Rc::clone(plugins),
+                arguments,
+                settings,
+            });
+            if !result.is_empty() {
+                discord
+                    .send_message(
+                        message.channel_id,
+                        &*format!(
+                            "{} {}",
+                            if settings.should_mark { "`►`" } else { "" },
+                            result
+                        ),
+                        "",
+                        false,
+                    )
+                    .expect("Failed to send message.");
+            }
+        });
+    }
+}
 
-    let mut plugins: Vec<Box<MPlugin>> = Vec::new();
+pub fn execute_plugin(connection: &Connection, plugins: &Rc<Vec<Box<MPlugin>>>, settings: &mut MisakiSettings, discord: &Discord, message: &Message, name: String) {
+    'plugins: for plugin in plugins.iter() {
+        'aliases: for alias in plugin.id() {
+            if *&name.to_lowercase() == alias {
+                let arguments = message.content
+                    .split_whitespace()
+                    .skip(1)
+                    .map(|x| String::from(x))
+                    .collect();
+                discord.delete_message(message.channel_id, message.id).ok();
+                let result = &*&plugin.execute(PluginData {
+                    connection,
+                    discord: &discord,
+                    message: &message,
+                    plugins: Rc::clone(plugins),
+                    arguments,
+                    settings,
+                });
+                if !result.is_empty() {
+                    discord
+                        .send_message(
+                            message.channel_id,
+                            &*format!(
+                                "{} {}",
+                                if settings.should_mark { "`►`" } else { "" },
+                                result
+                            ),
+                            "",
+                            false,
+                        )
+                        .expect("Failed to send message.");
+                }
+                break 'plugins;
+            }
+        }
+    }
+}
+
+fn main() {
+    let mut plugins: Rc<Vec<Box<MPlugin>>> = Rc::new(Vec::new());
     let mut settings: MisakiSettings = MisakiSettings { react_custom: true, latex_size: 24, ..Default::default() };
     println!("Adding default plugins...");
     add_default_plugins(&mut plugins);
@@ -94,49 +182,18 @@ fn main() {
     println!("Connected!");
     loop {
         match connection.recv_event() {
-            Ok(Event::MessageCreate(ref message)) => {
-                if message.author.id == ready.user.id {
-                    let ref m_content: String = message.content;
-                    if m_content.chars().take(catalyst.len()).collect::<String>() == catalyst {
-                        let ident = m_content
-                            .chars()
-                            .skip(catalyst.len())
-                            .take_while(|&c| c != ' ')
-                            .collect::<String>();
-                        'plugins: for plugin in plugins.iter() {
-                            'aliases: for alias in plugin.id() {
-                                if *&ident.to_lowercase() == alias {
-                                    let arguments = m_content
-                                        .split_whitespace()
-                                        .skip(1)
-                                        .map(|x| String::from(x))
-                                        .collect();
-                                    discord.delete_message(message.channel_id, message.id).ok();
-                                    let set = &mut settings;
-                                    let result = &*&plugin.execute(PluginData {
-                                        discord: &discord,
-                                        message: message,
-                                        arguments: arguments,
-                                        settings: set,
-                                    });
-                                    if !result.is_empty() {
-                                        discord
-                                            .send_message(
-                                                message.channel_id,
-                                                &*format!(
-                                                    "{} {}",
-                                                    if set.should_mark { "`►`" } else { "" },
-                                                    result
-                                                ),
-                                                "",
-                                                false,
-                                            )
-                                            .expect("Failed to send message.");
-                                    }
-                                    break 'plugins;
-                                }
-                            }
-                        }
+            Ok(Event::MessageCreate(ref message)) => if message.author.id == ready.user.id {
+                let ref m_content: String = message.content;
+                if m_content.chars().take(catalyst.len()).collect::<String>() == catalyst {
+                    let ident = m_content
+                        .chars()
+                        .skip(catalyst.len())
+                        .take_while(|&c| c != ' ')
+                        .collect::<String>();
+                    execute_plugin(&connection, &plugins, &mut settings, &discord, message, ident);
+                } else {
+                    if settings.uzi_mode {
+                        discord.edit_message(message.channel_id, message.id, "");
                     }
                 }
             }

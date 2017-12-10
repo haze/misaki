@@ -265,7 +265,7 @@ impl MPlugin for ReactPlugin {
                     *occurance_map.entry(ch).or_insert(0) += 1;
                     match occurance_map.get(&ch) {
                         Some(n) => {
-                            let mut x_name: String = ch.to_string();
+                            let x_name: String = ch.to_string();
                             let emoji = unicode.get(&format!(
                                 "{}{}",
                                 x_name,

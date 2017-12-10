@@ -8,13 +8,14 @@ use std::collections::HashMap;
 use std::fs::File;
 use discord;
 use discord::Discord;
-use discord::model::ChannelId;
+use discord::model::{Game, GameType, ChannelId};
 use rusqlite::Connection;
 use std::path::Path;
 use rand::Rng;
 use rand;
 use std::io::{Cursor, Read};
-use curl::easy::{Easy, Form};
+use curl::easy::Easy;
+use execute_plugin_multiple;
 
 #[derive(Debug, Clone)]
 struct MemoryChunk {
@@ -155,7 +156,7 @@ fn load_words() -> HashMap<Vec<String>, String> {
     let mut map = HashMap::new();
     let mut words_str: String = String::new();
     let mut file = File::open("res/mistaken.txt").unwrap();
-    file.read_to_string(&mut words_str);
+    file.read_to_string(&mut words_str).unwrap();
     for excerpt in words_str.lines() {
         let mut data = excerpt.split("->");
         let left = data.nth(0).unwrap().to_lowercase();
@@ -184,7 +185,6 @@ impl MPlugin for MisconceptionPlugin {
             words
                 .iter()
                 .map(|x| {
-                    let mut key: Vec<String> = Vec::new();
                     for key in misconceptions.keys() {
                         if key.contains(&x.to_string()) {
                             return misconceptions.get(key).unwrap().clone();
@@ -213,7 +213,7 @@ impl MPlugin for MisconceptionPlugin {
                     last_msg.channel_id,
                     last_msg.id,
                     &*to_misconception(last_msg_content),
-                );
+                ).unwrap();
             } else {
                 return to_misconception(last_msg_content);
             }
@@ -259,8 +259,8 @@ impl MPlugin for PurgePlugin {
                                         data.message.channel_id,
                                         discord::GetMessages::MostRecent,
                                         Some(attemps),
-                                    )
-                                    .expect("Failed to get recent messages.");
+                                    ).unwrap();
+                                // .expect("Failed to get recent messages.");
                                 for message in messages {
                                     if message.author.id == data.message.author.id {
                                         data.discord
@@ -281,7 +281,25 @@ impl MPlugin for PurgePlugin {
     }
 }
 
+pub struct GamePlugin;
 
+impl MPlugin for GamePlugin {
+    fn id(&self) -> Vec<&str> { vec!["game", "pres"] }
+
+    fn execute(&self, _data: PluginData) -> String {
+        if _data.arguments[0] == "none" {
+            _data.connection.set_game(None);
+        } else {
+            let game = Game {
+                name: _data.arguments.iter().map(|x| x.clone()).skip(2).collect::<Vec<String>>().join(" ").clone(),
+                url: if _data.arguments[1] == "none" { None } else { Some(_data.arguments[1].clone()) },
+                kind: if _data.arguments[0] == "stream" { GameType::Streaming } else { GameType::Playing },
+            };
+            _data.connection.set_game(Some(game));
+        }
+        String::new()
+    }
+}
 
 pub struct ShillPlugin;
 impl MPlugin for ShillPlugin {
@@ -295,8 +313,23 @@ impl MPlugin for ShillPlugin {
                 .map(|x| x.to_string())
                 .collect::<Vec<String>>()
                 .join(" ");
-            for rest in text.chars().skip(1) {
-                base.push_str(&*format!("\n{}", rest));
+            let len = text.chars().skip(1).collect::<String>().len();
+            for (i, rest) in text.chars().skip(1).enumerate() {
+                if data.settings.hyper_shill {
+                    let other;
+                    let spacer;
+                    if i == (len - 1) {
+                        other = text.chars().clone().rev().skip(1).map(|x| x.to_string()).collect::<Vec<String>>().join(" ");
+                        println!("i = {}, len-1 = {}, other = {:?}", i, len - 1, other);
+                        spacer = String::new();
+                    } else {
+                        other = text.chars().clone().rev().skip(i + 1).nth(0).unwrap().to_string();
+                        spacer = (0..((text.len() - 2) * 2) + 1).map(|_| " ").collect::<String>();
+                    }
+                    base.push_str(&*format!("\n{}{}{}", rest, spacer, other));
+                } else {
+                    base.push_str(&*format!("\n{}", rest));
+                } 
             }
             return format!("```{}```", base);
         }
@@ -387,7 +420,7 @@ impl MPlugin for UserInfoPlugin {
                             .field("Bot?", &*mem.bot.to_string(), true)
                             .field("Id", &*mem.id.to_string(), true)
                     })
-            }).expect("Failed to send embed.");
+            }).unwrap(); // .expect("Failed to send embed.");
         }
         String::new()
     }
@@ -411,7 +444,6 @@ impl MPlugin for MockPlugin {
                 .collect::<String>()
         }
 
-        let ref args = data.arguments;
         let ref msg = data.message;
         let ref d = data.discord;
 
@@ -424,7 +456,7 @@ impl MPlugin for MockPlugin {
             let last_msg = &last_msg_if.unwrap()[0];
             let last_msg_content = last_msg.content.clone();
             if last_msg.author.id == msg.author.id {
-                d.edit_message(last_msg.channel_id, last_msg.id, &*mock(last_msg_content));
+                d.edit_message(last_msg.channel_id, last_msg.id, &*mock(last_msg_content)).unwrap();
             } else {
                 return mock(last_msg_content);
             }
@@ -481,7 +513,7 @@ impl MPlugin for AboutPlugin {
                         true,
                     ).field("Modules", "12" /* lol */, true)
                 })
-        }).expect("Failed to send embed.");
+        }).unwrap(); // .expect("Failed to send embed.");
         String::new()
     }
 }
@@ -503,7 +535,7 @@ fn send_latex(link: String, discord: &Discord, chid: ChannelId) {
         transfer.perform().unwrap();
     }
 
-    discord.send_file(chid, "", Cursor::new(result), "latex.png");
+    discord.send_file(chid, "", Cursor::new(result), "latex.png").unwrap();
 }
 
 // curl 'http://quicklatex.com/latex3.f' -H 'Origin: http://quicklatex.com' -H 'Accept-Encoding: gzip, deflate' -H 'Accept-Language: en-US,en;q=0.9,fr;q=0.8' -H 'User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_12_6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/62.0.3202.18 Safari/537.36' -H 'Content-Type: application/x-www-form-urlencoded' -H 'Accept: */*' -H 'Referer: http://quicklatex.com/' -H 'X-Requested-With: XMLHttpRequest' -H 'Connection: keep-alive' -H 'DNT: 1' --data $htbu t lktlhl th eh the formua she needs is this one write here im just bllshit typing because i know i can witout looking at the screen.' --compressed
@@ -519,9 +551,8 @@ impl MPlugin for LatexPlugin {
         handle.url("http://quicklatex.com/latex3.f").unwrap();
         let formula = format!("formula={}&fcolor={}&fsize={}px", form, data.settings.latex_color, data.settings.latex_size);
         let chid = data.message.channel_id;
-        let mut xdat = formula + "&mode=0&out=1&remhost=quicklatex.com&preamble=\\usepackage{amsmath}\n\\usepackage{amsfonts}\n\\usepackage{amssymb}&rnd=66.52322504562316";
+        let xdat = formula + "&mode=0&out=1&remhost=quicklatex.com&preamble=\\usepackage{amsmath}\n\\usepackage{amsfonts}\n\\usepackage{amssymb}&rnd=66.52322504562316";
         handle.post_field_size(xdat.len() as u64).unwrap();
-        // let mut result = String::new();
 
         let mut result = Vec::new();
         {
@@ -543,6 +574,21 @@ impl MPlugin for LatexPlugin {
         let _link = chars.collect::<String>();
         let link = _link.split(" ").nth(0).unwrap();
         send_latex(link.to_string(), data.discord, chid);
+        String::new()
+    }
+}
+
+
+pub struct RepeatPlugin;
+
+impl MPlugin for RepeatPlugin {
+    fn id(&self) -> Vec<&str> { vec!["do", "repeat", "times"] }
+
+    fn execute(&self, data: PluginData) -> String {
+        let args = data.arguments;
+        let times = args[0].clone().parse::<i32>().unwrap();
+        let new_content = data.message.content.split(" ").skip(2).map(String::from).collect::<Vec<String>>().join(" ");
+        execute_plugin_multiple(&data.connection, times, &data.plugins, data.settings, data.discord, data.message, new_content, args[1].clone());
         String::new()
     }
 }

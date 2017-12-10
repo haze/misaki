@@ -3,7 +3,9 @@ extern crate discord;
 
 pub mod misaki {
 
+    use std::rc::Rc;
     use discord::Discord;
+    use discord::Connection;
     use discord::model::Message;
 
     #[derive(Default)]
@@ -13,6 +15,8 @@ pub mod misaki {
 		pub react_custom: bool,
         pub latex_color: String,
         pub latex_size: u32,
+        pub hyper_shill: bool,
+        pub uzi_mode: bool,
     }
 
     impl MisakiSettings {
@@ -35,6 +39,8 @@ pub mod misaki {
                 "embed" => true,
                 "mark" => true,
                 "react" => true,
+                "hypershill" => true,
+                "uzi" => true,
                 _ => false
             }
         }
@@ -73,6 +79,14 @@ pub mod misaki {
 					self.react_custom = if flip { !self.react_custom } else { to };
 					return Some(self.react_custom);
 				}
+                "hypershill" => {
+                    self.hyper_shill = if flip { !self.hyper_shill } else { to };
+                    return Some(self.hyper_shill)
+                }
+                "uzi" => {
+                    self.uzi_mode = if flip { !self.uzi_mode } else { to };
+                    return Some(self.uzi_mode)
+                }
                 _ => None,
             };
         }
@@ -81,9 +95,11 @@ pub mod misaki {
 
     // used for taking up less space when passing information around to plugins
     pub struct PluginData<'a> {
+        pub connection: &'a Connection,
         pub discord: &'a Discord,
         pub message: &'a Message,
         pub arguments: Vec<String>,
+        pub plugins: Rc<Vec<Box<MPlugin>>>,
         pub settings: &'a mut MisakiSettings,
     }
 
